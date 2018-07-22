@@ -1,0 +1,9 @@
+.DS_Store
+.project
+.settings
+yarn.lock
+node_modules
+yarn-cache
+npm-debug.log
+.config
+.bash_history
