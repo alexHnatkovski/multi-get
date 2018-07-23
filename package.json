@@ -1,0 +1,40 @@
+{
+  "name": "multi-get",
+  "version": "1.0.0",
+  "description": "Multi-GET booster utility",
+  "main": "index.js",
+  "scripts": {
+    "postinstall": "npm run build",
+    "test": "npm run test",
+    "build": "./node_modules/.bin/tsc",
+    "watch": "./node_modules/.bin/tsc --watch",
+    "dev": "npm run start & npm run watch",
+    "start": "node index.js --harmony"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexHnatkovski/multi-get.git"
+  },
+  "author": "Oleksandr Hnatkovskyy",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/alexHnatkovski/multi-get/issues"
+  },
+  "homepage": "https://github.com/alexHnatkovski/multi-get#readme",
+  "dependencies": {
+    "@types/request-promise": "^4.1.42",
+    "clui": "^0.3.6",
+    "figlet": "^1.2.0",
+    "inquirer": "^6.0.0",
+    "minimist": "^1.2.0",
+    "request": "^2.87.0",
+    "request-promise": "^4.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^10.5.2",
+    "jsdoc": "^3.5.5",
+    "tslint": "^5.11.0",
+    "tslint-config-airbnb": "^5.9.2",
+    "typescript": "^2.9.2"
+  }
+}

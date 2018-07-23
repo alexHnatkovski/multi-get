@@ -7,3 +7,5 @@ yarn-cache
 npm-debug.log
 .config
 .bash_history
+.idea
+dist
