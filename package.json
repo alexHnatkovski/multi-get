@@ -22,7 +22,6 @@
   },
   "homepage": "https://github.com/alexHnatkovski/multi-get#readme",
   "dependencies": {
-    "@types/request-promise": "^4.1.42",
     "clui": "^0.3.6",
     "figlet": "^1.2.0",
     "inquirer": "^6.0.0",
@@ -32,6 +31,8 @@
   },
   "devDependencies": {
     "@types/node": "^10.5.2",
+    "@types/inquirer": "0.0.42",
+    "@types/request-promise": "^4.1.42",
     "jsdoc": "^3.5.5",
     "tslint": "^5.11.0",
     "tslint-config-airbnb": "^5.9.2",

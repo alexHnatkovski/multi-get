@@ -1,38 +1,16 @@
 import * as fetch from 'request-promise';
-// import * as Buffer from 'buffer';
+import { Buffer } from 'buffer';
+import { appendFileSync } from 'fs';
+import { parse as parseUrl } from 'url';
 
-interface ChunkOptions {
+interface TransportOptions {
   fileChunkSize: number;
   totalChunks?: number;
   downloadLimit: number;
   totalFileSize?: number;
   fileUrl: string;
+  output: string;
 }
-
-/*class FileChunksTransport {
-  constructor(options) {
-    this.getFileHeaders(options.uri);
-  },
-
-  private async getFileHeaders(uri: string) {
-    return await fetch.head(uri, (err, response, body) => {
-      if (!err) {
-        return response.headers;
-      }
-    });
-  }
-
-  private calculateChunkSettings() {
-
-  }
-
-  public start() {
-
-  }
-
-}*/
-
-// const fileTransport =
 
 const fileTransport = (() => {
   /**
@@ -42,24 +20,29 @@ const fileTransport = (() => {
     fileChunkSize: 1048576,
     totalChunks: 4,
     downloadLimit: 1048576 * 4,
+    output: './output',
   });
 
   /**
    * File transport handler
    */
   const fileChunksTransport = {
-    settings: <ChunkOptions>Object.assign({}, defaults),
+    settings: <TransportOptions>Object.assign({}, defaults),
     fileChunksByteArray: null,
     /**
      * Initialzes download settings
      * @param {string} fileUrl
-     * @param {ChunkOptions} opts
+     * @param {TransportOptions} opts
      * @returns {Promise<any>}
      */
-    async init(fileUrl: string, opts?: ChunkOptions) {
+    async init(fileUrl: string, opts?: TransportOptions) {
       const fileHeaders = await this.getFileHeaders(fileUrl);
       this.settings.totalFileSize = fileHeaders['content-length'];
       this.settings.fileUrl = fileUrl;
+
+      if (!opts || !opts.output) {
+        this.settings.output += parseUrl(fileUrl).pathname;
+      }
 
       if (opts) {
         this.settings = Object.assign(this.settings, opts);
@@ -83,7 +66,7 @@ const fileTransport = (() => {
     },
 
     /**
-     * Handles files download
+     * Handles file chunks download and merges chunks into file
      * @returns {Promise<void>}
      */
     async partialFileDownload() {
@@ -110,28 +93,21 @@ const fileTransport = (() => {
           return fetch.get(opts);
         });
 
-      return await Promise
+      return Promise
         .all(contentPromises)
-        // .then(responses => Promise.all(responses.map(res => res.arrayBuffer())))
-        .then(buffers => Buffer.from(buffers));
+        .then(responses => Promise.all(responses.map(this.mergeFileChunksIntoFile.bind(this))));
     },
-    /*/!**
-     * Concat two ArrayBuffers
-     * @param {ArrayBuffer} ab1
-     * @param {ArrayBuffer} ab2
-     * @returns {ArrayBuffer} Returns new ArrayBuffer
-     * @private
-     *!/
-    concatArrayBuffer(ab1: ArrayBuffer, ab2: ArrayBuffer) {
-      const tmp = new Uint8Array(ab1.byteLength + ab2.byteLength);
-      tmp.set(new Uint8Array(ab1), 0);
-      tmp.set(new Uint8Array(ab2), ab1.byteLength);
-      return tmp.buffer;
-    },*/
+    mergeFileChunksIntoFile(chunk: string) {
+      const chunkBuffer = Buffer.from(chunk, 'binary');
+
+      appendFileSync(this.settings.output, chunkBuffer, { encoding: 'binary' });
+
+      return chunkBuffer;
+    },
   };
 
   return {
-    async getFile(url: string, userOpts?: ChunkOptions) {
+    async getFile(url: string, userOpts?: TransportOptions) {
       await fileChunksTransport.init(url, userOpts);
       return await fileChunksTransport.partialFileDownload();
     },
