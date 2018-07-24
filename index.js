@@ -1,5 +1,4 @@
 const App = require('./dist/app');
-const uri = 'http://a15cc616.bwtest-aws.pravala.com/384MB.jar';
 
 App.initCLI()
     .then((userInput) => {
@@ -10,11 +9,14 @@ App.initCLI()
             options.filename = userInput.filename;
         }
         if (userInput.customSettings) {
-            options.totalChunks = userInput.totalChunks;
-            options.chunkSize = userInput.chunkSize;
-            options.downloadLimit = userInput.downloadLimit;
+            options.totalChunks = parseInt(userInput.totalChunks);
+            options.chunkSize = parseInt(userInput.chunkSize);
+            options.downloadLimit = parseInt(userInput.downloadLimit);
         }
-        App.getFile(fileUrl, options).then(() => {
-            console.log('Succesfully downloaded!');
-        })
+        App.getFile(fileUrl, options)
+            .then(() => {
+                App.printStatusText('success', 'Successfully downloaded file to ./output folder!');
+            })
+    }).catch((e) => {
+        App.printStatusText('error', `We could not download file. ${e.toString()}`);
     });

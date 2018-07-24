@@ -1,36 +1,42 @@
 import * as fetch from 'request-promise';
 import { Buffer } from 'buffer';
-import { appendFileSync } from 'fs';
+import { appendFileSync, existsSync, mkdirSync, openSync, closeSync } from 'fs';
 import { parse as parseUrl } from 'url';
 
 interface TransportOptions {
   fileChunkSize: number;
-  totalChunks?: number;
+  totalChunks: number;
   downloadLimit: number;
-  totalFileSize?: number;
+  totalFileSize: number;
   fileUrl: string;
   output: string;
   filename?: string;
 }
 
-const mibSize = 1048576;
+const mibSizeInBytes = (1024 * 1024);
 const fileTransport = (() => {
   /**
    * Default download settings
    */
   const defaults = Object.freeze({
-    fileChunkSize: mibSize,
+    fileChunkSize: 1,
     totalChunks: 4,
-    downloadLimit: mibSize * 4,
+    downloadLimit: 4,
     output: './output',
   });
+
+  /**
+   * Converts mebibytes to bytes. Using Math.ceil in case if MiB param is not integer
+   * @param {number} MiB - integer or float number of mebibytes to convert to bytes
+   * @returns {number}
+   */
+  const getByteSize = (MiB: number): number => Math.ceil(mibSizeInBytes * MiB);
 
   /**
    * File transport handler
    */
   const fileChunksTransport = {
     settings: <TransportOptions>Object.assign({}, defaults),
-    fileChunksByteArray: null,
     /**
      * Initialzes download settings
      * @param {string} fileUrl
@@ -39,8 +45,12 @@ const fileTransport = (() => {
      */
     async init(fileUrl: string, opts?: TransportOptions) {
       const fileHeaders = await this.getFileHeaders(fileUrl);
-      this.settings.totalFileSize = fileHeaders['content-length'];
+      this.settings.totalFileSize = +fileHeaders['content-length'];
       this.settings.fileUrl = fileUrl;
+
+      if (!existsSync(this.settings.output)) {
+        mkdirSync(this.settings.output);
+      }
 
       if (!opts || !opts.filename) {
         this.settings.output += parseUrl(fileUrl).pathname;
@@ -48,20 +58,16 @@ const fileTransport = (() => {
         this.settings.output += `/${opts.filename}`;
       }
 
-      if (opts && opts.fileChunkSize) {
-        opts.fileChunkSize *= mibSize;
-      }
-
-      if (opts && opts.downloadLimit) {
-        opts.downloadLimit *= mibSize;
-      }
+      // Create and empty file
+      closeSync(openSync(this.settings.output, 'w'));
 
       if (opts) {
         this.settings = Object.assign(this.settings, opts);
       }
 
-      if ((this.settings.totalFileSize && this.settings.downloadLimit) && this.settings.totalFileSize <= this.settings.downloadLimit) {
-        this.settings.downloadLimit = this.settings.totalFileSize;
+      if (this.settings.totalFileSize <= getByteSize(this.settings.downloadLimit)) {
+        this.settings.downloadLimit = this.settings.totalFileSize / mibSizeInBytes;
+        this.settings.fileChunkSize = this.settings.downloadLimit / this.settings.totalChunks;
       }
     },
     /**
@@ -69,8 +75,8 @@ const fileTransport = (() => {
      * @param {string} uri
      * @returns {Promise<void>}
      */
-    async getFileHeaders(uri: string) {
-      return await fetch.head(uri, (err, response, body) => {
+    getFileHeaders(uri: string) {
+      return fetch.head(uri, (err, response) => {
         if (!err) {
           return response.headers;
         }
@@ -81,27 +87,29 @@ const fileTransport = (() => {
      * Handles file chunks download and merges chunks into file
      * @returns {Promise<void>}
      */
-    async partialFileDownload() {
+    partialFileDownload() {
       const contentPromises = new Array(this.settings.totalChunks)
         .fill(null)
         .map((item, index) => {
           let startByte = 0;
-          let endByte = this.settings.fileChunkSize;
+          let endByte = getByteSize(this.settings.fileChunkSize);
+          const downloadLimitBytes = getByteSize(this.settings.downloadLimit);
+          const fileChunkSizeBytes = getByteSize(this.settings.fileChunkSize);
 
           if (index !== 0) {
-            startByte += index * (this.settings.fileChunkSize || 0);
-            endByte = startByte + this.settings.fileChunkSize;
+            startByte += index * fileChunkSizeBytes;
+            endByte = startByte + fileChunkSizeBytes;
           }
 
-          if (endByte > this.settings.downloadLimit) {
-            endByte = this.settings.downloadLimit;
+          if (endByte > downloadLimitBytes || endByte > this.settings.totalFileSize) {
+            endByte = downloadLimitBytes < this.settings.totalFileSize ? downloadLimitBytes : this.settings.totalFileSize;
           }
 
           const opts = {
             url: this.settings.fileUrl,
             headers: { Range: `bytes=${startByte}-${endByte}` },
           };
-          console.log('Get', opts);
+          console.log(`Downloading Chunk #${index + 1}: `, opts.headers);
           return fetch.get(opts);
         });
 
