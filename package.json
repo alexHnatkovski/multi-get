@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "description": "Multi-GET booster utility",
   "main": "index.js",
+  "engines" : { "node" : ">=7.6.0" },
   "scripts": {
     "postinstall": "npm run build",
-    "test": "npm run test",
     "build": "./node_modules/.bin/tsc",
     "watch": "./node_modules/.bin/tsc --watch",
     "dev": "npm run start & npm run watch",
