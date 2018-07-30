@@ -52,7 +52,9 @@ const fileTransport = (() => {
 
       if (!existsSync(this.settings.output)) {
         mkdirp(this.settings.output, (e) => {
-          console.log('Could not create output folder! File Download cancelled. ', e.toString());
+          if (e) {
+            console.log('Could not create output folder! File Download cancelled. ');
+          }
         });
       }
 
