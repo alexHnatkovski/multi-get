@@ -10,7 +10,7 @@ App.initCLI()
         }
         if (userInput.customSettings) {
             options.totalChunks = parseInt(userInput.totalChunks);
-            options.chunkSize = parseInt(userInput.chunkSize);
+            options.fileChunkSize = parseInt(userInput.fileChunkSize);
             options.downloadLimit = parseInt(userInput.downloadLimit);
         }
         App.getFile(fileUrl, options)
@@ -18,5 +18,5 @@ App.initCLI()
                 App.printStatusText('success', 'Successfully downloaded file to ./output folder!');
             })
     }).catch((e) => {
-        App.printStatusText('error', `We could not download file. ${e.toString()}`);
-    });
+    App.printStatusText('error', `We could not download file. ${e.toString()}`);
+});

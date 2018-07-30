@@ -1,7 +1,9 @@
 import * as fetch from 'request-promise';
-import { Buffer } from 'buffer';
-import { appendFileSync, existsSync, mkdirSync, openSync, closeSync } from 'fs';
+import request from 'request';
+import { existsSync, createWriteStream } from 'fs';
+import mkdirp from 'mkdirp';
 import { parse as parseUrl } from 'url';
+import { cliUtility } from './cliHelper';
 
 interface TransportOptions {
   fileChunkSize: number;
@@ -38,7 +40,7 @@ const fileTransport = (() => {
   const fileChunksTransport = {
     settings: <TransportOptions>Object.assign({}, defaults),
     /**
-     * Initialzes download settings
+     * Initializes download settings
      * @param {string} fileUrl
      * @param {TransportOptions} opts
      * @returns {Promise<any>}
@@ -49,17 +51,22 @@ const fileTransport = (() => {
       this.settings.fileUrl = fileUrl;
 
       if (!existsSync(this.settings.output)) {
-        mkdirSync(this.settings.output);
+        mkdirp(this.settings.output, (e) => {
+          console.log('Could not create output folder! File Download cancelled. ', e.toString());
+        });
       }
 
-      if (!opts || !opts.filename) {
-        this.settings.output += parseUrl(fileUrl).pathname;
-      } else if (opts.filename) {
-        this.settings.output += `/${opts.filename}`;
+      let fileName;
+
+      if (opts && opts.filename) {
+        fileName = opts.filename;
+      } else {
+        fileName = (parseUrl(fileUrl).pathname || 'myDownload')
+          .split('/')
+          .pop();
       }
 
-      // Create and empty file
-      closeSync(openSync(this.settings.output, 'w'));
+      this.settings.output += `/${fileName}`;
 
       if (opts) {
         this.settings = Object.assign(this.settings, opts);
@@ -67,6 +74,9 @@ const fileTransport = (() => {
 
       if (this.settings.totalFileSize <= getByteSize(this.settings.downloadLimit)) {
         this.settings.downloadLimit = this.settings.totalFileSize / mibSizeInBytes;
+      }
+
+      if (this.settings.totalChunks * this.settings.fileChunkSize > this.settings.downloadLimit) {
         this.settings.fileChunkSize = this.settings.downloadLimit / this.settings.totalChunks;
       }
     },
@@ -88,16 +98,21 @@ const fileTransport = (() => {
      * @returns {Promise<void>}
      */
     partialFileDownload() {
+      const totalDataToTransfer = getByteSize(this.settings.totalChunks * this.settings.fileChunkSize) < this.settings.totalFileSize
+        ? getByteSize(this.settings.totalChunks * this.settings.fileChunkSize)
+        : this.settings.totalFileSize;
+      const downloadBar = cliUtility.initProgressBar(totalDataToTransfer);
       const contentPromises = new Array(this.settings.totalChunks)
         .fill(null)
-        .map((item, index) => {
+        .reduce((chunksData: { startByte: number, endByte: number }[], nextChunk, index) => {
           let startByte = 0;
           let endByte = getByteSize(this.settings.fileChunkSize);
+          const prevChunk = (index > 0) ? chunksData[index - 1] : { startByte: 0, endByte: 0 };
           const downloadLimitBytes = getByteSize(this.settings.downloadLimit);
           const fileChunkSizeBytes = getByteSize(this.settings.fileChunkSize);
 
-          if (index !== 0) {
-            startByte += index * fileChunkSizeBytes;
+          if (index > 0) {
+            startByte = prevChunk.endByte + 1;
             endByte = startByte + fileChunkSizeBytes;
           }
 
@@ -105,30 +120,43 @@ const fileTransport = (() => {
             endByte = downloadLimitBytes < this.settings.totalFileSize ? downloadLimitBytes : this.settings.totalFileSize;
           }
 
+          chunksData.push({ startByte, endByte });
+
+          return chunksData;
+        },      [])
+        .map((chunk) => {
           const opts = {
             url: this.settings.fileUrl,
-            headers: { Range: `bytes=${startByte}-${endByte}` },
+            headers: { Range: `bytes=${chunk.startByte}-${chunk.endByte}` },
           };
-          console.log(`Downloading Chunk #${index + 1}: `, opts.headers);
-          return fetch.get(opts);
+          return new Promise((resolve, reject) => {
+            request
+              .get(Object.assign({ encoding: null }, opts), (err, resp, body) => {
+                if (!err) {
+                  resolve(body);
+                } else {
+                  reject(err);
+                }
+              })
+              .on('data', (data) => {
+                downloadBar.update(data.length);
+              });
+          });
         });
 
       return Promise
         .all(contentPromises)
-        .then(responses => Promise.all(responses.map(this.mergeFileChunksIntoFile.bind(this))));
-    },
+        .then((data) => {
+          const file = createWriteStream(this.settings.output);
 
-    /**
-     * Converts file chunks into Buffers and appends them into file
-     * @param {string} chunk
-     * @returns {Buffer}
-     */
-    mergeFileChunksIntoFile(chunk: string) {
-      const chunkBuffer = Buffer.from(chunk, 'binary');
+          data
+            .forEach((chunk) => {
+              file.write(chunk, 'binary');
+            });
 
-      appendFileSync(this.settings.output, chunkBuffer, { encoding: 'binary' });
-
-      return chunkBuffer;
+          file.end();
+          downloadBar.done();
+        });
     },
   };
 

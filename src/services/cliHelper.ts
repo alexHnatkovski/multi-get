@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import figlet from 'figlet';
 import inquirer, { Answers } from 'inquirer';
 import { isUri } from 'valid-url';
+import progress from 'progress';
 
 /**
  * Utility service that helps working with CLI
@@ -16,6 +17,7 @@ const cliUtility = (() => {
       name: 'fileUrl',
       message: 'Please provide url address of the file: ',
       default: 'http://a15cc616.bwtest-aws.pravala.com/384MB.jar',
+      // default: 'https://cdn.keycdn.com/img/cdn-stats.png',
       validate: (input: string): boolean | string => !!isUri(input) || 'Please provide valid url',
     },
     {
@@ -45,7 +47,7 @@ const cliUtility = (() => {
     },
     {
       type: 'input',
-      name: 'chunkSize',
+      name: 'fileChunkSize',
       message: 'Please specify size of each chunk (MiB) or hit enter to use default: ',
       default: 1,
       when: (answers: Answers) => answers.customSettings,
@@ -105,6 +107,23 @@ const cliUtility = (() => {
       } else {
         console.log(text);
       }
+    },
+    initProgressBar(total: number) {
+      const bar = new progress('  downloading [:bar] :percent :etas', {
+        total,
+        complete: '=',
+        incomplete: ' ',
+        width: 40,
+      });
+      return {
+        bar,
+        update: (dataLength: number) => {
+          bar.tick(dataLength);
+        },
+        done: () => {
+          console.log('\n');
+        },
+      };
     },
   };
 })();
